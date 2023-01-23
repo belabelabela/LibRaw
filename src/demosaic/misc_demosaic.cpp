@@ -16,6 +16,7 @@
 
  */
 
+#include <thread>
 #include "../../internal/dcraw_defs.h"
 
 void LibRaw::pre_interpolate()
@@ -104,24 +105,31 @@ void LibRaw::border_interpolate(int border)
 
 void LibRaw::lin_interpolate_loop(int *code, int size)
 {
-  int row;
-  for (row = 1; row < height - 1; row++)
-  {
-    int col, *ip;
-    ushort *pix;
-    for (col = 1; col < width - 1; col++)
+  auto f = [=](int height_from, int height_to, int *code, int size){
+    int row;
+    for (row = height_from; row < height_to; row++)
     {
-      int i;
-      int sum[4];
-      pix = image[row * width + col];
-      ip = code + ((((row % size) * 16) + (col % size)) * 32);
-      memset(sum, 0, sizeof sum);
-      for (i = *ip++; i--; ip += 3)
-        sum[ip[2]] += pix[ip[0]] << ip[1];
-      for (i = colors; --i; ip += 2)
-        pix[ip[0]] = sum[ip[0]] * ip[1] >> 8;
+      int col, *ip;
+      ushort *pix;
+      for (col = 1; col < width - 1; col++)
+      {
+        int i;
+        int sum[4];
+        pix = image[row * width + col];
+        ip = code + ((((row % size) * 16) + (col % size)) * 32);
+        memset(sum, 0, sizeof sum);
+        for (i = *ip++; i--; ip += 3)
+          sum[ip[2]] += pix[ip[0]] << ip[1];
+        for (i = colors; --i; ip += 2)
+          pix[ip[0]] = sum[ip[0]] * ip[1] >> 8;
+      }
     }
-  }
+  };
+
+  std::thread t(f,1,height/2,code,size);
+  std::thread t2(f,height/2,height-1,code,size);
+  t.join();
+  t2.join();
 }
 
 void LibRaw::lin_interpolate()
